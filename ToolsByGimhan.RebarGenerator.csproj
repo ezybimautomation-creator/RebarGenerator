@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- net48  = Revit 2023 / 2024 (.NET Framework 4.8) -->
+    <!-- net8.0-windows = Revit 2025 / 2026 (.NET 8) -->
+    <TargetFrameworks>net8.0-windows;net48</TargetFrameworks>
+    <AssemblyName>ToolsByGimhan.RebarGenerator</AssemblyName>
+    <RootNamespace>ToolsByGimhan.RebarGenerator</RootNamespace>
+    <UseWPF>true</UseWPF>
+    <PlatformTarget>x64</PlatformTarget>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Configurations>Debug;Release</Configurations>
+    <Platforms>x64</Platforms>
+    <!-- Suppress benign assembly-version conflict warnings from Revit DLLs -->
+    <NoWarn>$(NoWarn);MSB3277</NoWarn>
+  </PropertyGroup>
+
+  <!-- ── Revit 2023 / 2024 ── net48 ─────────────────────────────────────── -->
+  <PropertyGroup Condition="'$(TargetFramework)'=='net48'">
+    <DefineConstants>REVIT2023_2024</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(TargetFramework)'=='net48'">
+    <!-- Revit 2024 API via NuGet — no local Revit install required -->
+    <PackageReference Include="Revit_All_Main_Versions_API_x64" Version="2024.2.0" />
+  </ItemGroup>
+
+  <!-- ── Revit 2025 / 2026 ── net8.0-windows ────────────────────────────── -->
+  <PropertyGroup Condition="'$(TargetFramework)'=='net8.0-windows'">
+    <DefineConstants>REVIT2025_2026</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(TargetFramework)'=='net8.0-windows'">
+    <!-- Revit 2025 API via NuGet — no local Revit install required -->
+    <PackageReference Include="Revit_All_Main_Versions_API_x64" Version="2025.0.0" />
+  </ItemGroup>
+
+  <!-- ── Shared packages ───────────────────────────────────────────────── -->
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+
+</Project>
