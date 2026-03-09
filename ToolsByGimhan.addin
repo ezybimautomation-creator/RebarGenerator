@@ -11,27 +11,12 @@
     net8.0-windows\ToolsByGimhan.RebarGenerator.dll → for Revit 2025 and 2026
 -->
 <RevitAddIns>
-  <AddIn Type="Command">
-    <!-- Mandatory: unique GUID per addin (do not share across installations) -->
-    <ClientId>A3C6E8F1-2B47-4D9A-8C0E-1F5B7D3A6E92</ClientId>
-
-    <!-- Point to the DLL next to this manifest (relative path) -->
-    <AssemblyPath>ToolsByGimhan.RebarGenerator.dll</AssemblyPath>
-    <FullClassName>ToolsByGimhan.RebarGenerator.RebarGeneratorCommand</FullClassName>
-
-    <!-- UI text — matches bundle.yaml title and tooltip exactly -->
-    <Name>Rebar Generator</Name>
-    <Text>Rebar Generator</Text>
-    <Description>Automatically models rebar in a selected beam/column based on user input.</Description>
-
-    <!-- Icon — must be beside the DLL (16×16 for Image, 32×32 for LargeImage) -->
-    <Image>icon.jpg</Image>
-    <LargeImage>icon.jpg</LargeImage>
-
-    <!-- Tab/Panel placement (optional — comment out to use Add-Ins tab default) -->
-    <!--
+  <AddIn Type="Application">
+    <AddInId>A3C6E8F1-2B47-4D9A-8C0E-1F5B7D3A6E92</AddInId>
+    <Assembly>ToolsByGimhan.RebarGenerator.dll</Assembly>
+    <FullClassName>ToolsByGimhan.RebarGenerator.ToolsByGimhanApplication</FullClassName>
+    <Name>ToolsByGimhan Rebar Generator</Name>
     <VendorId>ToolsByGimhan</VendorId>
     <VendorDescription>Tools by Gimhan Umendra</VendorDescription>
-    -->
   </AddIn>
 </RevitAddIns>

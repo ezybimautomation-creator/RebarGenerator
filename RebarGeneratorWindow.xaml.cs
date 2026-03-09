@@ -124,6 +124,7 @@ namespace ToolsByGimhan.RebarGenerator
             col_side_y_type.SelectionChanged += ColInputChanged;
             col_side_y_qty .SelectionChanged += ColInputChanged;
             col_tie_type   .SelectionChanged += ColInputChanged;
+            chk_col_internal_ties.Click      += ColInputChanged;
             col_profile_selector.SelectionChanged += ColProfileChanged;
             save_col_profile_btn.Click            += SaveColProfileClick;
             del_col_profile_btn .Click            += DeleteColProfileClick;
@@ -576,7 +577,26 @@ namespace ToolsByGimhan.RebarGenerator
                     AddRect(col_preview_canvas, ox + covMm * sc, oy + covMm * sc, stW, stH, Brushes.Green, Math.Max(tieD * sc, 2.0), null);
                 }
 
-                // 3. Draw Custom Ties as POLYGONS through selected bar centers
+                // 3. Draw Auto Internal Ties (if checked)
+                if (ColInternalTiesChecked)
+                {
+                    foreach (var group in GetAutoTies())
+                    {
+                        if (group.Count < 3) continue;
+                        var pts = group.Select(idx => _drawnColBarCenters[idx]).ToList();
+                        var poly = new System.Windows.Shapes.Polygon
+                        {
+                            Stroke = Brushes.Indigo,
+                            StrokeThickness = Math.Max(tieD * sc, 1.5),
+                            Fill = null,
+                            Opacity = 0.7
+                        };
+                        foreach (var p in pts) poly.Points.Add(p);
+                        col_preview_canvas.Children.Add(poly);
+                    }
+                }
+
+                // 4. Draw Custom Ties as POLYGONS through selected bar centers
                 foreach (var group in CustomColTies)
                 {
                     if (group.Count < 3) continue;
@@ -610,22 +630,77 @@ namespace ToolsByGimhan.RebarGenerator
                     col_preview_canvas.Children.Add(poly);
                 }
 
-                // 4. Draw Clickable Bars on top
+                // 5. Draw Clickable Bars on top
                 for (int i = 0; i < _drawnColBarCenters.Count; i++)
                 {
                     Brush fill = (i < 4) ? Brushes.Red : Brushes.Blue; // Corners red, sides blue
                     AddClickableColBar(_drawnColBarCenters[i].X, _drawnColBarCenters[i].Y, barDiameters[i] * sc, fill, i);
                 }
 
-                // 5. Update UI Status Message
+                // 6. Update UI Status Message
                 if (tie_status_text != null)
                 {
                     tie_status_text.Text = _selectedColBars.Count > 0 
                         ? $"{_selectedColBars.Count} bars selected. Click 'Add Tie' to combine."
-                        : $"{CustomColTies.Count} custom ties drawn. Click bars to build more.";
+                        : $"{CustomColTies.Count} custom ties + (Auto-Ties) drawn.";
                 }
             }
             catch { /* preview only */ }
+        }
+
+        /// <summary>
+        /// Logic for automatic internal cross-tie patterns based on bar count.
+        /// </summary>
+        public List<List<int>> GetAutoTies()
+        {
+            var result = new List<List<int>>();
+            if (!int.TryParse(col_side_x_qty.SelectedItem as string, out int qx)) qx = 0;
+            if (!int.TryParse(col_side_y_qty.SelectedItem as string, out int qy)) qy = 0;
+
+            if (qx == 0 && qy == 0) return result;
+
+            // Index offsets:
+            // 0-3: TL, TR, BR, BL
+            // Top: 4 .. 4+qx-1
+            // Bot: 4+qx .. 4+2*qx-1
+            // Left: 4+2*qx .. 4+2*qx+qy-1
+            // Right: 4+2*qx+qy .. 4+2*qx+2*qy-1
+
+            // 1. Diamond pattern if exactly 1 bar per face (Series AS/CS)
+            if (qx == 1 && qy == 1)
+            {
+                result.Add(new List<int> { 4, 7, 5, 6 }); // Top-Mid, Right-Mid, Bot-Mid, Left-Mid
+                return result;
+            }
+
+            // 2. Rectangular Grid pattern (Series CH/DH/etc)
+            // Vertical rectangles connecting Top to Bot
+            for (int i = 0; i < qx; i++)
+            {
+                // Each pair of opposite bars forms a vertical sub-loop
+                // For 2 bars, it might be one loop covering both or two loops. 
+                // Images show individual loops for pairs or one loop for group.
+                // Let's do one loop if qx=2
+                if (qx == 2)
+                {
+                    result.Add(new List<int> { 4, 5, 7, 6 }); // Top1, Top2, Bot2, Bot1
+                    break;
+                }
+                result.Add(new List<int> { 4 + i, 4 + qx + i }); // 2-point tie (Line)
+            }
+
+            // Horizontal rectangles connecting Left to Right
+            for (int j = 0; j < qy; j++)
+            {
+                if (qy == 2)
+                {
+                    result.Add(new List<int> { 4 + 2 * qx + 0, 4 + 2 * qx + qy + 0, 4 + 2 * qx + qy + 1, 4 + 2 * qx + 1 });
+                    break;
+                }
+                result.Add(new List<int> { 4 + 2 * qx + j, 4 + 2 * qx + qy + j });
+            }
+
+            return result;
         }
 
         // ── Profile management – Beam ────────────────────────────────────
@@ -937,11 +1012,22 @@ namespace ToolsByGimhan.RebarGenerator
                             double cx2 = (bb.Min.X + bb.Max.X)/2;
                             double cy2 = (bb.Min.Y + bb.Max.Y)/2;
                             var pt  = new XYZ(cx2, cy2, zMin + zLen*ratio);
-                            var vs  = CreateSectionView(_doc, el, pt, XYZ.BasisZ, vt, mark + suffix);
+
+                            // Get the column's local orientation so the section aligns with its faces
+                            XYZ colBasisX = XYZ.BasisX;
+                            XYZ colBasisY = XYZ.BasisY;
+                            if (el is FamilyInstance fi)
+                            {
+                                var cTrans = fi.GetTransform();
+                                colBasisX = cTrans.BasisX;
+                                colBasisY = cTrans.BasisY;
+                            }
+
+                            var vs  = CreateColumnSectionView(_doc, el, pt, colBasisX, colBasisY, vt, mark + suffix);
                             if (vs != null)
                             {
                                 cnt++;
-                                if (chk_dims_col.IsChecked == true) CreateSectionDims(_doc, vs, el);
+                                if (chk_dims_col.IsChecked == true) CreateColumnSectionDims(_doc, vs, el);
                             }
                         }
                     }
@@ -995,27 +1081,70 @@ namespace ToolsByGimhan.RebarGenerator
                 var t         = RevitTransform.Identity;
                 t.Origin      = point;
 
-                if (isVert) { t.BasisZ = XYZ.BasisZ; t.BasisY = XYZ.BasisY; t.BasisX = XYZ.BasisX; }
+                if (isVert)
+                {
+                    // Horizontal cross-section through a vertical element (column)
+                    t.BasisX = XYZ.BasisX;
+                    t.BasisY = XYZ.BasisY;
+                    t.BasisZ = -XYZ.BasisZ;   // look downward into the model
+                }
                 else
                 {
-                    var viewDir = normVec;
+                    // Cross-section through a horizontal element (beam)
+                    // viewDir = along the beam axis (the direction the section "looks" into the model)
                     var up      = XYZ.BasisZ;
-                    var right   = up.CrossProduct(viewDir);
+                    var right   = normVec.CrossProduct(up).Normalize();
+                    // BasisX = right, BasisY = up, BasisZ = view direction (right × up is not used;
+                    // for ViewSection the BasisZ must point into the model, i.e. along the beam)
                     t.BasisX = right;
-                    t.BasisY = viewDir.CrossProduct(right);
-                    t.BasisZ = viewDir;
+                    t.BasisY = up;
+                    t.BasisZ = normVec;        // look along beam direction
                 }
 
-                double w = 3.0, h = 3.0;
+                double w = 3.0, h = 3.0, d = 1.0;
                 var elType = doc.GetElement(el.GetTypeId());
                 double? bv = TryParam(elType, new[]{"b","Width","Beam Width","Diameter","D"});
                 double? hv = TryParam(elType, new[]{"h","Height","Beam Height","Depth","Diameter","D"});
-                if (bv.HasValue) w = bv.Value * 4;
+                if (bv.HasValue) { w = bv.Value * 4; d = bv.Value * 2; }
                 if (hv.HasValue) h = hv.Value * 4;
 
                 var bbox       = new BoundingBoxXYZ { Transform = t };
-                bbox.Min       = new XYZ(-w/2, -h/2, -1.0);
-                bbox.Max       = new XYZ( w/2,  h/2,  1.0);
+                bbox.Min       = new XYZ(-w/2, -h/2, 0.0);
+                bbox.Max       = new XYZ( w/2,  h/2,  d);
+
+                var vs = ViewSection.CreateSection(doc, vt.Id, bbox);
+                try { vs.Name = name; } catch { vs.Name = $"{name}_{el.Id}"; }
+                return vs;
+            }
+            catch { return null; }
+        }
+
+        /// <summary>
+        /// Creates a horizontal plan-section for a column, aligned to the column's local axes.
+        /// This ensures auto-dimensions can find the column's planar faces.
+        /// </summary>
+        private static ViewSection CreateColumnSectionView(Document doc, Element el,
+            XYZ point, XYZ colBasisX, XYZ colBasisY, ViewFamilyType vt, string name)
+        {
+            try
+            {
+                var t      = RevitTransform.Identity;
+                t.Origin   = point;
+                // Align section axes with the column's local orientation
+                t.BasisX   = colBasisX;      // column's local X → section Right
+                t.BasisY   = colBasisY;      // column's local Y → section Up
+                t.BasisZ   = -XYZ.BasisZ;    // look downward into the model
+
+                double w = 3.0, h = 3.0, d = 1.0;
+                var elType = doc.GetElement(el.GetTypeId());
+                double? bv = TryParam(elType, new[]{"b","Width","Beam Width","Diameter","D"});
+                double? hv = TryParam(elType, new[]{"h","Height","Beam Height","Depth","Diameter","D"});
+                if (bv.HasValue) { w = bv.Value * 4; d = bv.Value * 2; }
+                if (hv.HasValue) h = hv.Value * 4;
+
+                var bbox       = new BoundingBoxXYZ { Transform = t };
+                bbox.Min       = new XYZ(-w/2, -h/2, 0.0);
+                bbox.Max       = new XYZ( w/2,  h/2,  d);
 
                 var vs = ViewSection.CreateSection(doc, vt.Id, bbox);
                 try { vs.Name = name; } catch { vs.Name = $"{name}_{el.Id}"; }
@@ -1078,6 +1207,74 @@ namespace ToolsByGimhan.RebarGenerator
                     var ra = new ReferenceArray();
                     ra.Append(fHorz[0].Reference); ra.Append(fHorz[fHorz.Count-1].Reference);
                     double lu = minU - off;
+                    doc.Create.NewDimension(view,
+                        Autodesk.Revit.DB.Line.CreateBound(vOrg+vRight*lu+vUp*minV, vOrg+vRight*lu+vUp*maxV), ra);
+                }
+            }
+            catch { /* dim errors are non-fatal */ }
+        }
+
+        /// <summary>
+        /// Column-specific dimension placement: width at TOP, depth at LEFT.
+        /// The downward-looking section (BasisZ = -Z) inverts the visual Y-axis,
+        /// so we swap the offsets compared to the beam version.
+        /// </summary>
+        private static void CreateColumnSectionDims(Document doc, ViewSection view, Element el)
+        {
+            try
+            {
+                var opt = new Options { ComputeReferences = true, View = view };
+                var geom = el.get_Geometry(opt);
+                Solid solid = null;
+                if (geom != null) foreach (var g in geom)
+                {
+                    if (g is Solid s && s.Volume > 0) { solid = s; break; }
+                    if (g is GeometryInstance gi) foreach (var gi2 in gi.GetInstanceGeometry())
+                        if (gi2 is Solid s2 && s2.Volume > 0) { solid = s2; break; }
+                }
+                if (solid == null) return;
+
+                var vRight = view.RightDirection; var vUp = view.UpDirection; var vOrg = view.Origin;
+                var fVert = new List<PlanarFace>(); var fHorz = new List<PlanarFace>();
+                double minU=1e9,maxU=-1e9,minV=1e9,maxV=-1e9;
+
+                foreach (Face f in solid.Faces)
+                {
+                    if (f is not PlanarFace pf) continue;
+                    var n = pf.FaceNormal;
+                    if (Math.Abs(n.DotProduct(vRight)) > 0.9)
+                    {
+                        fVert.Add(pf);
+                        double u = (pf.Origin - vOrg).DotProduct(vRight);
+                        if (u < minU) minU=u; if (u > maxU) maxU=u;
+                    }
+                    else if (Math.Abs(n.DotProduct(vUp)) > 0.9)
+                    {
+                        fHorz.Add(pf);
+                        double v = (pf.Origin - vOrg).DotProduct(vUp);
+                        if (v < minV) minV=v; if (v > maxV) maxV=v;
+                    }
+                }
+                double off = 50.0/304.8;
+                // Width dim at VISUAL TOP (minV - off, because downward section flips V axis)
+                if (fVert.Count >= 2)
+                {
+                    fVert.Sort((a, b) => (a.Origin-vOrg).DotProduct(vRight)
+                                        .CompareTo((b.Origin-vOrg).DotProduct(vRight)));
+                    var ra = new ReferenceArray();
+                    ra.Append(fVert[0].Reference); ra.Append(fVert[fVert.Count-1].Reference);
+                    double lv = minV - off;
+                    doc.Create.NewDimension(view,
+                        Autodesk.Revit.DB.Line.CreateBound(vOrg+vRight*minU+vUp*lv, vOrg+vRight*maxU+vUp*lv), ra);
+                }
+                // Depth dim at VISUAL LEFT (maxU + off, because downward section flips U axis)
+                if (fHorz.Count >= 2)
+                {
+                    fHorz.Sort((a, b) => (a.Origin-vOrg).DotProduct(vUp)
+                                        .CompareTo((b.Origin-vOrg).DotProduct(vUp)));
+                    var ra = new ReferenceArray();
+                    ra.Append(fHorz[0].Reference); ra.Append(fHorz[fHorz.Count-1].Reference);
+                    double lu = maxU + off;
                     doc.Create.NewDimension(view,
                         Autodesk.Revit.DB.Line.CreateBound(vOrg+vRight*lu+vUp*minV, vOrg+vRight*lu+vUp*maxV), ra);
                 }

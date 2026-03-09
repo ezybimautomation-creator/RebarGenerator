@@ -42,5 +42,16 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 
+  <!-- ── Auto-deploy to Revit 2026 Addins on build ────────────────────── -->
+  <PropertyGroup Condition="'$(TargetFramework)'=='net8.0-windows'">
+    <PostBuildEvent>xcopy /Y "$(TargetDir)*.*" "%APPDATA%\Autodesk\Revit\Addins\2026\" &gt;nul 2&gt;&amp;1
+exit /b 0</PostBuildEvent>
+  </PropertyGroup>
+
+  <!-- ── Debug: launch Revit 2026 with F5 ─────────────────────────────── -->
+  <PropertyGroup Condition="'$(Configuration)'=='Debug' And '$(TargetFramework)'=='net8.0-windows'">
+    <StartAction>Program</StartAction>
+    <StartProgram>C:\Program Files\Autodesk\Revit 2026\Revit.exe</StartProgram>
+  </PropertyGroup>
 
 </Project>
